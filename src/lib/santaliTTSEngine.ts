@@ -93,13 +93,39 @@ export interface SantaliSpeechOptions {
 class SantaliTTSService {
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private currentSpeakingId: string | null = null;
+  private voicesReady = false;
+
+  constructor() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      // Chrome (and some other engines) load voices asynchronously: the first
+      // getVoices() call right after page load often returns []. Warm the
+      // cache now and again once the real list arrives via voiceschanged,
+      // so the very first speak() call can still pick a proper Hindi voice.
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        this.voicesReady = true;
+      };
+    }
+  }
+
+  private pickVoice(): SpeechSynthesisVoice | undefined {
+    const voices = window.speechSynthesis.getVoices();
+    return voices.find(v =>
+      (v.lang.includes('hi') || v.lang.includes('IN')) &&
+      (v.name.toLowerCase().includes('google') ||
+       v.name.toLowerCase().includes('natural') ||
+       v.name.toLowerCase().includes('swara') ||
+       v.name.toLowerCase().includes('lekha') ||
+       v.name.toLowerCase().includes('female'))
+    ) || voices.find(v => v.lang.includes('hi') || v.lang.includes('IN'));
+  }
 
   /**
    * Speaks the given text using the Santali Phonetic Engine
    */
   public speak(
-    text: string, 
-    id: string, 
+    text: string,
+    id: string,
     options: SantaliSpeechOptions = {},
     onStateChange?: (speakingId: string | null) => void
   ): boolean {
@@ -122,6 +148,38 @@ class SantaliTTSService {
     const processedText = prepareSantaliPhoneticsForSpeech(text);
     if (!processedText) return false;
 
+    // On first use, voices may not have loaded yet (common on Chrome). Wait
+    // one voiceschanged tick so we don't fall back to a non-Indian default voice.
+    if (!this.voicesReady && window.speechSynthesis.getVoices().length === 0) {
+      let started = false;
+      const onVoicesLoaded = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesLoaded);
+        if (!started) {
+          started = true;
+          this.speakInternal(processedText, id, options, onStateChange);
+        }
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', onVoicesLoaded);
+      // Fallback in case voiceschanged never fires (some browsers/OSes)
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesLoaded);
+        if (!started) {
+          started = true;
+          this.speakInternal(processedText, id, options, onStateChange);
+        }
+      }, 300);
+      return true;
+    }
+
+    return this.speakInternal(processedText, id, options, onStateChange);
+  }
+
+  private speakInternal(
+    processedText: string,
+    id: string,
+    options: SantaliSpeechOptions,
+    onStateChange?: (speakingId: string | null) => void
+  ): boolean {
     const utterance = new SpeechSynthesisUtterance(processedText);
     utterance.lang = options.lang || 'hi-IN';
 
@@ -132,16 +190,7 @@ class SantaliTTSService {
     utterance.volume = options.volume ?? 1.0;
 
     // Pick best matching Devanagari / Indian Hindi voice
-    const voices = window.speechSynthesis.getVoices();
-    const optimalVoice = voices.find(v => 
-      (v.lang.includes('hi') || v.lang.includes('IN')) && 
-      (v.name.toLowerCase().includes('google') || 
-       v.name.toLowerCase().includes('natural') || 
-       v.name.toLowerCase().includes('swara') ||
-       v.name.toLowerCase().includes('lekha') ||
-       v.name.toLowerCase().includes('female'))
-    ) || voices.find(v => v.lang.includes('hi') || v.lang.includes('IN'));
-
+    const optimalVoice = this.pickVoice();
     if (optimalVoice) {
       utterance.voice = optimalVoice;
     }

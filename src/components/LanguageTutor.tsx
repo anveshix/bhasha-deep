@@ -127,11 +127,17 @@ export const LanguageTutor: React.FC<LanguageTutorProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  useEffect(() => {
-    if (voiceTranscript && voiceTranscript.trim()) {
-      setInput(voiceTranscript);
+  const callGeminiWithRetry = async (ai: GoogleGenAI, params: any, retries = 3, delay = 2000): Promise<any> => {
+    try {
+      return await ai.models.generateContent(params);
+    } catch (err: any) {
+      if (err?.status === 429 && retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return callGeminiWithRetry(ai, params, retries - 1, delay * 2);
+      }
+      throw err;
     }
-  }, [voiceTranscript]);
+  };
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || input).trim();
@@ -158,7 +164,7 @@ export const LanguageTutor: React.FC<LanguageTutorProps> = ({
       const dbSearch = searchFullSantaliDatabase(query);
       const systemInst = `${TUTOR_SYSTEM_INSTRUCTION(level)}\n\nACTIVELY QUERY AND REFER TO THIS SANTALI GROUND TRUTH DATASET:\n${dbSearch.groundTruthContext}`;
 
-      const response = await ai.models.generateContent({
+      const response = await callGeminiWithRetry(ai, {
         model: MODEL_NAME,
         contents: [...history, { role: 'user', parts: [{ text: query }] }],
         config: {
@@ -193,6 +199,14 @@ export const LanguageTutor: React.FC<LanguageTutorProps> = ({
       setIsLoading(false);
     }
   };
+
+  const lastVoiceTranscriptRef = useRef('');
+  useEffect(() => {
+    if (voiceTranscript && voiceTranscript.trim() && voiceTranscript !== lastVoiceTranscriptRef.current) {
+      lastVoiceTranscriptRef.current = voiceTranscript;
+      handleSendMessage(voiceTranscript);
+    }
+  }, [voiceTranscript]);
 
   const handleCopyText = (text: string, id: string) => {
     navigator.clipboard.writeText(text);

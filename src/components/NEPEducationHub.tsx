@@ -23,6 +23,18 @@ interface NEPEducationHubProps {
   showToast: (msg: string, type?: 'error' | 'warning' | 'info') => void;
 }
 
+const callGeminiWithRetry = async (ai: any, params: any, retries = 3, delay = 2000): Promise<any> => {
+  try {
+    return await ai.models.generateContent(params);
+  } catch (err: any) {
+    if (err?.status === 429 && retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callGeminiWithRetry(ai, params, retries - 1, delay * 2);
+    }
+    throw err;
+  }
+};
+
 export function NEPEducationHub({ getAI, speakText, speakingId, showToast }: NEPEducationHubProps) {
   // Main Tab State
   const [activeTab, setActiveTab] = useState<'textbooks' | 'ai_generator' | 'lesson_plans' | 'glossary'>('textbooks');
@@ -114,7 +126,7 @@ Include the following sections in Markdown:
 
 STRICT RULE: Santali MUST be written in Devanagari script. Do not output Ol Chiki font characters unless explicitly requested.`;
 
-      const response = await ai.models.generateContent({
+      const response = await callGeminiWithRetry(ai, {
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: { temperature: 0.3 }
@@ -154,7 +166,7 @@ Generate a complete, practical NEP 2020 Lesson Plan in Markdown:
 
 STRICT RULE: Santali text in Devanagari script.`;
 
-      const response = await ai.models.generateContent({
+      const response = await callGeminiWithRetry(ai, {
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: { temperature: 0.3 }

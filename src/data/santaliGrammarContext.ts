@@ -538,9 +538,15 @@ ${matchEntry.santaliRoman ? `- **Santali (Roman):** ${matchEntry.santaliRoman}\n
     const sd = (entry.santaliDeva || '').toLowerCase();
     const sr = (entry.santaliRoman || '').toLowerCase();
 
-    if (h.includes(query.toLowerCase()) || query.toLowerCase().includes(h)) score += 40;
-    if (sd.includes(query.toLowerCase()) || query.toLowerCase().includes(sd)) score += 40;
-    if (sr && (sr.includes(query.toLowerCase()) || query.toLowerCase().includes(sr))) score += 40;
+    // Guard every "field is a substring of the query" check with a minimum length:
+    // an empty or 1-char field (e.g. the Sentence Matrix entries, which leave
+    // santaliDeva blank) is trivially "contained" in any non-empty query via
+    // String.prototype.includes(''), which would otherwise force-match every
+    // entry on every lookup and drown the real matches in ground-truth noise.
+    const lowerQuery = query.toLowerCase();
+    if (h.length > 1 && (h.includes(lowerQuery) || lowerQuery.includes(h))) score += 40;
+    if (sd.length > 1 && (sd.includes(lowerQuery) || lowerQuery.includes(sd))) score += 40;
+    if (sr.length > 1 && (sr.includes(lowerQuery) || lowerQuery.includes(sr))) score += 40;
 
     queryTokens.forEach(token => {
       if (token.length > 1) {

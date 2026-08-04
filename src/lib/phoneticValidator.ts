@@ -5,6 +5,7 @@
  */
 
 import { dialectVariations } from '../data/dialects';
+import { transliterateDevaToRoman, containsDevanagari } from './transliteration';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -42,7 +43,11 @@ export function validatePhoneticSantali(text: string): ValidationResult {
     return { isValid: true, score: 100, issues: [], suggestions: [] };
   }
 
-  const words = text.toLowerCase().split(/\s+/);
+  // The heuristics below are written for Romanized Santali. The app's
+  // standard input script is Devanagari, so transliterate first --
+  // otherwise every check below is a silent no-op against Devanagari text.
+  const romanizedText = containsDevanagari(text) ? transliterateDevaToRoman(text) : text;
+  const words = romanizedText.toLowerCase().split(/\s+/);
   
   for (const word of words) {
     // 1. Check for characters not used in standard Santali Romanization

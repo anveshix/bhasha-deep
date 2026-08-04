@@ -55,6 +55,18 @@ const PRESET_SCENARIOS: PresetScenario[] = [
   }
 ];
 
+const callGeminiWithRetry = async (ai: any, params: any, retries = 3, delay = 2000): Promise<any> => {
+  try {
+    return await ai.models.generateContent(params);
+  } catch (err: any) {
+    if (err?.status === 429 && retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callGeminiWithRetry(ai, params, retries - 1, delay * 2);
+    }
+    throw err;
+  }
+};
+
 export function BhashaSetuBridge({ getAI, speakText, speakingId, user, db, showToast }: BhashaSetuBridgeProps) {
   const [outsiderText, setOutsiderText] = useState('');
   const [outsiderInterimText, setOutsiderInterimText] = useState('');
@@ -117,7 +129,7 @@ STRICT RULES:
 2. Santali MUST be written strictly in Devanagari script (e.g. जोहार, चेकालेका मेनामा).
 3. Ensure natural, respectful, and crystal-clear phrasing so both parties easily understand each other.`;
 
-      const response = await ai.models.generateContent({
+      const response = await callGeminiWithRetry(ai, {
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: { temperature: 0.2 }

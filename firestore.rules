@@ -24,14 +24,15 @@ service cloud.firestore {
 
     // --- Validation Blueprints ---
     function isValidTranslation(data) {
-      return data.keys().hasAll(['input_text', 'translated_text', 'source_lang', 'target_lang', 'timestamp', 'user_id']) 
-        && data.keys().size() == 6
+      return data.keys().hasAll(['input_text', 'translated_text', 'source_lang', 'target_lang', 'timestamp', 'user_id', 'verified_dataset_match'])
+        && data.keys().size() == 7
         && data.input_text is string && data.input_text.size() <= 50000
         && data.translated_text is string && data.translated_text.size() <= 100000
         && data.source_lang is string && data.source_lang.size() <= 50
         && data.target_lang is string && data.target_lang.size() <= 50
         && data.timestamp is number
-        && data.user_id == request.auth.uid;
+        && data.user_id == request.auth.uid
+        && data.verified_dataset_match is bool;
     }
 
     function isValidVoiceLog(data) {

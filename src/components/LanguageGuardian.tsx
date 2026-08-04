@@ -22,6 +22,18 @@ interface LocalContribution {
   timestamp: number;
 }
 
+const callGeminiWithRetry = async (ai: any, params: any, retries = 3, delay = 2000): Promise<any> => {
+  try {
+    return await ai.models.generateContent(params);
+  } catch (err: any) {
+    if (err?.status === 429 && retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callGeminiWithRetry(ai, params, retries - 1, delay * 2);
+    }
+    throw err;
+  }
+};
+
 export function LanguageGuardian({ user, db, showToast, getAI }: LanguageGuardianProps) {
   // Input fields for manual contribution
   const [santaliDeva, setSantaliDeva] = useState('');
@@ -149,8 +161,8 @@ Schema:
   }
 ]`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
+      const response = await callGeminiWithRetry(ai, {
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: { temperature: 0.1 }
       });
