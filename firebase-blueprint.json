@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Translation": {
+      "title": "Translation",
+      "description": "Historical log of translations performed in the app.",
+      "type": "object",
+      "properties": {
+        "input_text": { "type": "string" },
+        "translated_text": { "type": "string" },
+        "source_lang": { "type": "string" },
+        "target_lang": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "user_id": { "type": "string" }
+      },
+      "required": ["input_text", "translated_text", "source_lang", "target_lang", "timestamp", "user_id"]
+    },
+    "VoiceLog": {
+      "title": "VoiceLog",
+      "description": "Logs of voice recognition interactions.",
+      "type": "object",
+      "properties": {
+        "raw_text": { "type": "string" },
+        "processed_text": { "type": "string" },
+        "translated_text": { "type": "string" },
+        "user_id": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["raw_text", "processed_text", "translated_text", "user_id", "timestamp"]
+    },
+    "SantaliDataset": {
+      "title": "SantaliDataset",
+      "description": "Dataset for linguistic refinement.",
+      "type": "object",
+      "properties": {
+        "santali_text": { "type": "string" },
+        "hindi_text": { "type": "string" },
+        "confidence": { "type": "number" },
+        "source": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["santali_text", "hindi_text", "confidence", "source", "timestamp"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "User feedback.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "rating": { "type": "string", "enum": ["up", "down"] },
+        "text": { "type": "string" },
+        "input": { "type": "string" },
+        "user_id": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["type", "rating", "text", "input", "user_id", "timestamp"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "User favorites.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "entry_id": { "type": "string" },
+        "input": { "type": "string" },
+        "output": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["user_id", "timestamp"]
+    },
+    "Contribution": {
+      "title": "Contribution",
+      "description": "Community contributed vocabulary and terms.",
+      "type": "object",
+      "properties": {
+        "santali_deva": { "type": "string" },
+        "roman_student": { "type": "string" },
+        "pos": { "type": "string" },
+        "hindi": { "type": "string" },
+        "english": { "type": "string" },
+        "example_santali": { "type": "string" },
+        "example_hindi": { "type": "string" },
+        "contributed_by": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["santali_deva", "roman_student", "pos", "hindi", "contributed_by", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/translations/{translationId}": {
+      "schema": "Translation",
+      "description": "Translation history records."
+    },
+    "/voice_logs/{logId}": {
+      "schema": "VoiceLog",
+      "description": "Detailed logs of voice-to-text interactions."
+    },
+    "/santali_dataset/{dataId}": {
+      "schema": "SantaliDataset",
+      "description": "Santali-Hindi dataset."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "User feedback entries."
+    },
+    "/favorites/{favoriteId}": {
+      "schema": "Favorite",
+      "description": "User favorites."
+    },
+    "/contributions/{contributionId}": {
+      "schema": "Contribution",
+      "description": "Community vocabulary contributions."
+    }
+  }
+}

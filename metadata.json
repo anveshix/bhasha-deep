@@ -1,0 +1,10 @@
+{
+  "name": "Remix: Remix: BHASHA DEEP",
+  "description": "The ultimate Santali Language Intelligence Engine - Translator, Tutor and Semantic Dictionary",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
