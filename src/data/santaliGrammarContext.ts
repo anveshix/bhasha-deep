@@ -1,4 +1,5 @@
 import { initialDictionary } from './dictionary';
+import { wrapUntrustedData } from '../lib/untrustedContent';
 
 export interface ConversationContextItem {
   hindi: string;
@@ -237,6 +238,15 @@ export function parseTextOrMarkdownContent(content: string, fileName: string = '
   };
 }
 
+/** Short, single-line neutralisation for inline prompt values. */
+function neutralize(value: unknown): string {
+  return String(value)
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[\u0000-\u001F\u200B-\u200F\u202A-\u202E]/g, '')
+    .replace(/[<>]/g, '')
+    .slice(0, 300);
+}
+
 export function getSantaliLinguisticContext(): string {
   let contextStr = `\n━━━━━━━━━━━━━━━━━━━━━━━\n📚 ADVANCED SANTALI LINGUISTIC & GRAMMAR REPORT (Skrefsrud / NCERT / 23 Tenses Architecture):\n\n`;
 
@@ -283,9 +293,12 @@ export function getSantaliLinguisticContext(): string {
         const parsedLocal = JSON.parse(rawLocal);
         if (Array.isArray(parsedLocal) && parsedLocal.length > 0) {
           contextStr += `\n8. USER LOCAL GROUND TRUTH & LEARNED GRAMMAR RULES (${parsedLocal.length} entries):\n`;
+          // Values are user-supplied, so they are neutralised (no role markers,
+          // no prompt-control phrases, no completion sentinel) before they are
+          // appended to the system instruction.
           parsedLocal.slice(0, 30).forEach((item: any) => {
             if (item.hindi && (item.santali_deva || item.roman_student)) {
-              contextStr += `• Hindi: "${item.hindi}" ➔ Santali: "${item.santali_deva || item.roman_student}" (${item.pos || 'User Rule'})\n`;
+              contextStr += `• Hindi: ${JSON.stringify(neutralize(item.hindi))} ➔ Santali: ${JSON.stringify(neutralize(item.santali_deva || item.roman_student))} (${neutralize(item.pos || 'User Rule')})\n`;
             }
           });
         }
@@ -298,7 +311,9 @@ export function getSantaliLinguisticContext(): string {
           contextStr += `\n9. USER UPLOADED TEXT / MARKDOWN GROUND TRUTH DOCUMENTS (${parsedDocs.length} files):\n`;
           parsedDocs.slice(0, 5).forEach((docItem: any) => {
             if (docItem.fileName && docItem.content) {
-              contextStr += `--- User Uploaded Document: ${docItem.fileName} ---\n${docItem.content.slice(0, 1500)}\n\n`;
+              // Fenced and labelled as DATA: an uploaded file cannot change the
+              // model's task or its rules, only provide vocabulary.
+              contextStr += `\n${wrapUntrustedData(String(docItem.fileName), String(docItem.content), 1500)}\n`;
             }
           });
         }

@@ -1,12 +1,11 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import {defineConfig} from 'vite';
 
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(({mode}) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(() => {
   return {
     plugins: [
       react(), 
@@ -65,9 +64,9 @@ export default defineConfig(({mode}) => {
         }
       })
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
+    // NOTE: no `define` for process.env.GEMINI_API_KEY. Doing that inlined the
+    // deployment secret into a public JS asset. The key now lives only in the
+    // server process and is reached through the /api/gemini proxy.
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -110,7 +109,22 @@ export default defineConfig(({mode}) => {
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
-      hmr: process.env.DISABLE_HMR !== 'true',
+      // The app is served by Express (server.ts) with Vite in middlewareMode,
+      // so the HMR socket must stay on the same origin/port Express listens on.
+      // Without clientPort, Vite advertises its own port, which is not proxied
+      // to the user's browser.
+      hmr: { clientPort: Number(process.env.PORT) || 3000 },
+      // The sandbox proxies the dev server under a per-session preview host
+      // (e.g. https://<port>-<id>.e2b.app). Vite 6 rejects unknown Host headers
+      // by default, which surfaced as "Blocked request. This host is not allowed."
+      // Allow the preview host family plus localhost; operators can extend it.
+      allowedHosts: [
+        'localhost',
+        '127.0.0.1',
+        '.e2b.app',
+        '.github.dev',
+        ...(process.env.VITE_ALLOWED_HOSTS?.split(',').map(h => h.trim()).filter(Boolean) ?? []),
+      ],
     },
   };
 });

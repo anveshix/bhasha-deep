@@ -5,9 +5,9 @@ import {
   HelpCircle, Compass, Copy, Check, ChevronRight, Zap, RefreshCw
 } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { GoogleGenAI } from '@google/genai';
 import { initialDictionary } from '../data/dictionary';
 import { searchFullSantaliDatabase } from '../data/santaliGrammarContext';
+import type { AiClient } from '../lib/aiClient';
 import { DictionaryEntry } from '../types';
 
 interface Message {
@@ -29,7 +29,7 @@ interface QuizState {
 }
 
 interface LanguageTutorProps {
-  getAI: () => GoogleGenAI;
+  getAI: () => AiClient;
   speakText: (text: string, id: string) => void;
   speakingId: string | null;
   showToast: (message: string, type?: 'error' | 'warning' | 'info') => void;
@@ -127,7 +127,7 @@ export const LanguageTutor: React.FC<LanguageTutorProps> = ({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  const callGeminiWithRetry = async (ai: GoogleGenAI, params: any, retries = 3, delay = 2000): Promise<any> => {
+  const callGeminiWithRetry = async (ai: AiClient, params: any, retries = 3, delay = 2000): Promise<any> => {
     try {
       return await ai.models.generateContent(params);
     } catch (err: any) {

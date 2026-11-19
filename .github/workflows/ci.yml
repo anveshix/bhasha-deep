@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint Firestore rules
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # A leaked deployment key is a release blocker, not a warning.
+      - name: Assert no API key in the bundle
+        run: |
+          if grep -rIl --include='*.js' --include='*.css' -E 'AIza[0-9A-Za-z_-]{35}' dist \
+             | xargs -r grep -L 'firebase-applet-config'; then
+            echo "::error::A Google API key was found in build output."
+            exit 1
+          fi
+          echo "No API keys in dist/."

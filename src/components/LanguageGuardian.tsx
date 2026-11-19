@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Plus, Check, Search, Trash2, Send, Award, FileText, AlertTriangle, Sparkles, BookOpen } from 'lucide-react';
 import { collection, addDoc, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
+import { attributionFor } from '../lib/attribution';
 
 interface LanguageGuardianProps {
   user: any;
@@ -99,7 +100,7 @@ export function LanguageGuardian({ user, db, showToast, getAI }: LanguageGuardia
       english: english.trim(),
       example_santali: exampleSantali.trim(),
       example_hindi: exampleHindi.trim(),
-      contributed_by: user ? (user.displayName || user.email || 'Anonymous') : 'Local Guardian',
+      contributed_by: attributionFor(user),
       timestamp: Date.now()
     };
 
@@ -175,7 +176,7 @@ Schema:
       if (Array.isArray(parsed)) {
         const parsedWithMeta = parsed.map(item => ({
           ...item,
-          contributed_by: user ? (user.displayName || user.email) : 'AI Parse Assistant',
+          contributed_by: attributionFor(user),
           timestamp: Date.now()
         }));
         setParsedEntries(parsedWithMeta);
