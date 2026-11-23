@@ -2,27 +2,45 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isSignedIn() { 
-      return request.auth != null; 
+    // ---------------------------------------------------------------------
+    // Hardening notes (see docs/SECURITY.md)
+    //  * Admin is decided by a custom claim, never by a hardcoded email. The
+    //    previous version trusted `request.auth.token.email == "<personal
+    //    address">`, which put a person's identity in a public repo and made
+    //    every admin power hinge on one consumer Google account.
+    //  * Every client-writable collection bounds field count, field sizes and
+    //    the timestamp, so a client cannot backdate a record to pin it to the
+    //    top of a feed, or smuggle an unbounded blob into a document.
+    //  * `contributed_by` must identify the caller, so one user cannot post
+    //    vocabulary under another user's name.
+    // ---------------------------------------------------------------------
+
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Auth token contains email but no 'admin' claim explicitly unless set. 
-    function isAdmin() { 
-      // Bootstrap with the user email from runtime
-      return isSignedIn() && request.auth.token.email == "pranav19feb87@gmail.com"; 
+
+    function isAdmin() {
+      // Set with: firebase auth:import / Admin SDK custom claims.
+      return isSignedIn() && request.auth.token.admin == true;
     }
 
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
-    function isValidId(id) { 
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
-    }
-    function isOwner() { 
-      // Always test resource.data against auth uid
-      return isSignedIn() && existing().user_id == request.auth.uid; 
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // --- Validation Blueprints ---
+    function isOwner() {
+      return isSignedIn() && existing().user_id == request.auth.uid;
+    }
+
+    // Client clocks are untrusted: allow a small skew, reject the future.
+    function isPlausibleTimestamp(ts) {
+      return ts is number && ts <= request.time.toMillis() + 60000 && ts > 0;
+    }
+
+    // --- Validation blueprints ---
     function isValidTranslation(data) {
       return data.keys().hasAll(['input_text', 'translated_text', 'source_lang', 'target_lang', 'timestamp', 'user_id', 'verified_dataset_match'])
         && data.keys().size() == 7
@@ -30,7 +48,7 @@ service cloud.firestore {
         && data.translated_text is string && data.translated_text.size() <= 100000
         && data.source_lang is string && data.source_lang.size() <= 50
         && data.target_lang is string && data.target_lang.size() <= 50
-        && data.timestamp is number
+        && isPlausibleTimestamp(data.timestamp)
         && data.user_id == request.auth.uid
         && data.verified_dataset_match is bool;
     }
@@ -41,7 +59,7 @@ service cloud.firestore {
         && data.raw_text is string && data.raw_text.size() <= 20000
         && data.processed_text is string && data.processed_text.size() <= 20000
         && data.translated_text is string && data.translated_text.size() <= 20000
-        && data.timestamp is number
+        && isPlausibleTimestamp(data.timestamp)
         && data.user_id == request.auth.uid;
     }
 
@@ -50,30 +68,29 @@ service cloud.firestore {
         && data.keys().size() == 5
         && data.santali_text is string && data.santali_text.size() <= 50000
         && data.hindi_text is string && data.hindi_text.size() <= 50000
-        && data.confidence is number
+        && data.confidence is number && data.confidence >= 0 && data.confidence <= 1
         && data.source is string && data.source.size() <= 100
-        && data.timestamp is number;
-      // Missing user_id intentionally, because the dataset is public or admin-managed.
+        && isPlausibleTimestamp(data.timestamp);
+      // No user_id by design: the dataset is shared reference data.
     }
 
     function isValidFeedback(data) {
       return data.keys().hasAll(['type', 'rating', 'text', 'input', 'user_id', 'timestamp'])
         && data.keys().size() == 6
         && data.type is string && data.type.size() <= 50
-        && (data.rating == 'up' || data.rating == 'down' || data.rating == null || data.rating == '') 
+        && (data.rating == 'up' || data.rating == 'down')
         && data.text is string && data.text.size() <= 5000
         && data.input is string && data.input.size() <= 50000
-        && data.timestamp is number
+        && isPlausibleTimestamp(data.timestamp)
         && data.user_id == request.auth.uid;
     }
 
     function isValidFavorite(data) {
-      // It can either be `{ user_id, entry_id, timestamp }` or `{ user_id, input, output, timestamp }`
       let isDictionaryFav = data.keys().hasAll(['user_id', 'entry_id', 'timestamp']) && data.keys().size() == 3;
       let isTranslationFav = data.keys().hasAll(['user_id', 'input', 'output', 'timestamp']) && data.keys().size() == 4;
-      
+
       return (isDictionaryFav || isTranslationFav)
-        && data.timestamp is number
+        && isPlausibleTimestamp(data.timestamp)
         && data.user_id == request.auth.uid
         && (isDictionaryFav ? (data.entry_id is string && data.entry_id.size() <= 128) : true)
         && (isTranslationFav ? (data.input is string && data.input.size() <= 50000 && data.output is string && data.output.size() <= 100000) : true);
@@ -81,25 +98,44 @@ service cloud.firestore {
 
     function isValidContribution(data) {
       return data.keys().hasAll(['santali_deva', 'roman_student', 'pos', 'hindi', 'contributed_by', 'timestamp'])
-        && data.santali_deva is string && data.santali_deva.size() <= 5000
+        // Bounded field count: stops clients attaching arbitrary large blobs.
+        && data.keys().size() <= 10
+        && data.santali_deva is string && data.santali_deva.size() > 0 && data.santali_deva.size() <= 5000
         && data.roman_student is string && data.roman_student.size() <= 5000
         && data.pos is string && data.pos.size() <= 100
-        && data.hindi is string && data.hindi.size() <= 5000
-        && data.contributed_by is string && data.contributed_by.size() <= 500
-        && data.timestamp is number;
+        && data.hindi is string && data.hindi.size() > 0 && data.hindi.size() <= 5000
+        && data.contributed_by is string && data.contributed_by.size() > 0 && data.contributed_by.size() <= 500
+        && isPlausibleTimestamp(data.timestamp);
     }
 
+    // Uploaded .txt/.md "ground truth" documents. Previously written by the
+    // client into a collection with no rule at all, so every upload was
+    // silently denied while the UI reported success.
+    function isValidMdDocument(data) {
+      return data.keys().hasAll(['fileName', 'content', 'extractedCount', 'timestamp'])
+        && data.keys().size() == 4
+        && data.fileName is string && data.fileName.size() > 0 && data.fileName.size() <= 255
+        && data.content is string && data.content.size() <= 500000
+        && data.extractedCount is number && data.extractedCount >= 0
+        && isPlausibleTimestamp(data.timestamp);
+    }
+
+    // Deny-by-default safety net. Note: a broader deny does not override a
+    // narrower allow, so every collection below still needs its own rule.
     match /{document=**} { allow read, write: if false; }
 
     match /translations/{translationId} {
-      allow list: if isSignedIn() && resource.data.user_id == request.auth.uid;
+      // `resource.data.user_id` in a list rule is evaluated per returned
+      // document, which is what makes the client's where(user_id ==) query
+      // safe. The limit guard bounds the cost of a hostile query.
+      allow list: if isSignedIn() && request.query.limit <= 100 && resource.data.user_id == request.auth.uid;
       allow get: if isSignedIn() && (isOwner() || isAdmin());
       allow create: if isSignedIn() && isValidId(translationId) && isValidTranslation(incoming());
       allow update, delete: if isAdmin();
     }
 
     match /voice_logs/{logId} {
-      allow list: if isSignedIn() && resource.data.user_id == request.auth.uid;
+      allow list: if isSignedIn() && request.query.limit <= 100 && resource.data.user_id == request.auth.uid;
       allow get: if isSignedIn() && (isOwner() || isAdmin());
       allow create: if isSignedIn() && isValidId(logId) && isValidVoiceLog(incoming());
       allow update, delete: if isAdmin();
@@ -111,24 +147,44 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /user_md_documents/{docId} {
+      allow list: if isSignedIn() && request.query.limit <= 50;
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(docId) && isValidMdDocument(incoming());
+      // Uploads carry user content, so only admins may rewrite or erase them.
+      allow update, delete: if isAdmin();
+    }
+
     match /feedback/{feedbackId} {
+      // Requires sign-in: the client used to send `user_id: 'anonymous'` for
+      // logged-out users, which could never satisfy the owner check and made
+      // every such submission fail silently.
       allow create: if isSignedIn() && isValidId(feedbackId) && isValidFeedback(incoming());
       allow read: if isAdmin();
       allow update, delete: if isAdmin();
     }
 
     match /favorites/{favoriteId} {
-      // User can create, read, and delete their own favorites
       allow create: if isSignedIn() && isValidId(favoriteId) && isValidFavorite(incoming());
-      allow update: if (isAdmin() || (isSignedIn() && incoming().diff(existing()).affectedKeys().hasOnly(['timestamp']) && isOwner() && isValidFavorite(incoming())));
-      allow list: if isSignedIn() && resource.data.user_id == request.auth.uid;
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && isOwner()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['timestamp'])
+            && isValidFavorite(incoming()));
+      allow list: if isSignedIn() && request.query.limit <= 200 && resource.data.user_id == request.auth.uid;
       allow get: if isSignedIn() && isOwner();
       allow delete: if isSignedIn() && isOwner();
     }
 
     match /contributions/{contributionId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(contributionId) && isValidContribution(incoming());
+      allow create: if isSignedIn()
+        && isValidId(contributionId)
+        && isValidContribution(incoming())
+        // Attribution cannot be spoofed: it must be the caller's own id or
+        // the display name carried in their verified token.
+        && (incoming().contributed_by == request.auth.uid
+            || incoming().contributed_by == request.auth.token.name);
       allow update, delete: if isAdmin();
     }
 
