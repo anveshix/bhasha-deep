@@ -2,6 +2,8 @@
 
 A real-time bidirectional translation and education platform for Santali and Hindi.
 
+> **Live demo:** not published. The app needs its Node server and a Gemini API key, so run it locally (see Quick start).
+
 ## Security
 
 Read [docs/SECURITY.md](docs/SECURITY.md) before deploying. Summary:
@@ -25,11 +27,29 @@ npm run typecheck && npm test && npm run build
 NODE_ENV=production npm start   # serve the production bundle
 ```
 
-## Project Structure
-- `PDA/`: Personal Digital Assistant management/logs.
-- `AI/`: AI-related orchestration logic.
-- `knowledge/`: Domain-specific glossaries and Santali linguistic data.
-- `docs/`: Technical and user documentation.
-- `prompts/`: System prompt library.
-- `agents/`: Agent configuration and instructions.
-- `workflows/`: Task and process workflows.
+## Folder structure
+
+```
+.
+├── src/                  # React + TypeScript frontend (App.tsx, components, lib, data)
+├── server.ts             # Express server: serves the app and POST /api/gemini
+├── docs/                 # SECURITY, changelog, project memory and handoff notes
+├── firestore.rules       # Firestore security rules (deny by default)
+├── firebase*.json        # Firebase project config (rules, indexes, blueprint)
+├── public/               # Static assets served as-is
+├── AI/ PDA/ agents/ knowledge/ prompts/ workflows/
+│                         # Domain knowledge, prompt library and agent notes
+└── .github/workflows/    # CI
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © 2026 anveshix
+
+## Author
+
+**anveshix** — [github.com/anveshix](https://github.com/anveshix)
